@@ -1,4 +1,3 @@
-<%= javascript_include_tag "https://js.stripe.com/v1/", "application" %>
 <%= tag :meta, :name => "stripe-key", :content => 'add_publc_key_here' %>
 
 <h2>Sign up</h2>
@@ -29,18 +28,8 @@
     Amount: 50
   </div>
 
-  <div class="field">
-    <%= label_tag :card_number, "Credit Card Number" %>
-    <%= text_field_tag :card_number, params[:card_number], name: nil %>
-  </div>
-  <div class="field">
-    <%= label_tag :card_code, "Security Code on Card (CVV)" %>
-    <%= text_field_tag :card_code, nil, name: nil %>
-  </div>
-  <div class="field">
-    <%= label_tag :card_month, "Card Expiration" %>
-    <%= select_month nil, {add_month_numbers: true}, {name: nil, id: "card_month"} %>
-    <%= select_year nil, {start_year: Date.today.year, end_year: Date.today.year+15}, {name: nil, id: "card_year"} %>
+  <div id="card-element">
+    <!-- A Stripe Element will be inserted here. -->
   </div>
 
   <div class='form-group'>
@@ -51,46 +40,71 @@
 
 <%= render "users/shared/links" %>
 <script type="text/javascript">
-  (function() {
-  var payment;
+  // Create a Stripe client.
+  var stripe = Stripe('add_publc_key_here');
 
-  jQuery(function() {
-    Stripe.setPublishableKey($('meta[name="stripe-key"]').attr('content'));
-    return payment.setupForm();
-  });
+  // Create an instance of Elements.
+  var elements = stripe.elements();
 
-  payment = {
-    setupForm: function() {
-      return $('#new_user').submit(function() {
-        $('input[type=submit]').attr('disabled', true);
-        if ($('#card_number').length) {
-          payment.processCard();
-          return false;
-        } else {
-          return true;
-        }
-      });
-    },
-    processCard: function() {
-      var card;
-      card = {
-        number: $('#card_number').val(),
-        cvc: $('#card_code').val(),
-        expMonth: $('#card_month').val(),
-        expYear: $('#card_year').val()
-      };
-      return Stripe.createToken(card, payment.handleStripeResponse);
-    },
-    handleStripeResponse: function(status, response) {
-      if (status === 200) {
-        $('#user_card_token').val(response.id);
-        return $('#new_user')[0].submit();
-      } else {
-        $('#stripe_error').text(response.error.message);
-        return $('input[type=submit]').attr('disabled', false);
+  // Custom styling can be passed to options when creating an Element.
+  // (Note that this demo uses a wider set of styles than the guide below.)
+  var style = {
+    base: {
+      color: '#32325d',
+      fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+      fontSmoothing: 'antialiased',
+      fontSize: '16px',
+      '::placeholder': {
+        color: '#aab7c4'
       }
+    },
+    invalid: {
+      color: '#fa755a',
+      iconColor: '#fa755a'
     }
   };
 
-}).call(this);
+  // Create an instance of the card Element.
+  var card = elements.create('card', {style: style});
+
+  // Add an instance of the card Element into the `card-element` <div>.
+  card.mount('#card-element');
+
+  // Handle real-time validation errors from the card Element.
+  card.on('change', function(event) {
+    var displayError = document.getElementById('stripe_error');
+    if (event.error) {
+      displayError.textContent = event.error.message;
+    } else {
+      displayError.textContent = '';
+    }
+  });
+
+  // Handle form submission.
+  var form = document.getElementById('new_user');
+  form.addEventListener('submit', function(event) {
+    event.preventDefault();
+
+    stripe.createToken(card).then(function(result) {
+      if (result.error) {
+        // Inform the user if there was an error.
+        var errorElement = document.getElementById('stripe_error');
+        errorElement.textContent = result.error.message;
+        return $('input[type=submit]').attr('disabled', false);
+      } else {
+        // Send the token to your server.
+        stripeTokenHandler(result.token);
+      }
+    });
+  });
+
+  // Submit the form with the token ID.
+  function stripeTokenHandler(token) {
+    // Insert the token ID into the form so it gets submitted to the server
+    var form = document.getElementById('new_user');
+    $('#user_card_token').val(token.id);;
+
+    // Submit the form
+    form.submit();
+  }
 </script>
